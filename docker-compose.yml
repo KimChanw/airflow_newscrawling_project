@@ -65,6 +65,7 @@ x-airflow-common:
     - ${AIRFLOW_PROJ_DIR:-.}/dags:/opt/airflow/dags
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
+    - ${AIRFLOW_PROJ_DIR:-.}/configs/airflow.cfg:/opt/airflow/airflow.cfg
 
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
@@ -277,5 +278,46 @@ services:
       airflow-init:
         condition: service_completed_successfully
 
+  statsd-exporter:
+    image: prom/statsd-exporter:v0.21.0
+    volumes:
+      - ./configs/statsd.yaml:/home/statsd-mapping-configs.yaml
+    entrypoint: ["/bin/sh", "-c", "--"]
+    command: ["statsd_exporter --log.level debug --statsd.mapping-config=/home/statsd-mapping-configs.yaml"]
+    ports:
+      - 9102:9102   # scrape port
+      - 9125:9125   # ingest port
+    restart: always
+
+  prometheus:
+    image: prom/prometheus:v2.26.0
+    volumes:
+      - ./configs/prometheus.yaml:/etc/prometheus/prometheus.yaml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - 9092:9090
+    restart: always
+
+  grafana:
+    image: grafana/grafana:6.7.2
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=grafana
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: always
+    ports:
+      - 3000:3000
+
+
 volumes:
   postgres-db-volume:
+  prometheus_data:
+  grafana_data:
